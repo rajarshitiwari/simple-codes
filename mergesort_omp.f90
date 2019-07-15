@@ -1,0 +1,124 @@
+PROGRAM TESTMERGESORT
+
+  USE OMP_LIB
+  IMPLICIT NONE 
+  INTEGER, PARAMETER :: N = 12*240**3
+  REAL(8), DIMENSION(N) :: A
+  REAL(8), DIMENSION ((N+1)/2) :: T
+  INTEGER :: I
+  REAL(8) :: TIME1, TIME2
+  INTERFACE
+     RECURSIVE SUBROUTINE MERGESORT(ARR,NUM)
+       IMPLICIT NONE
+       REAL(8), DIMENSION(:), INTENT(INOUT) :: ARR
+       INTEGER, INTENT(IN) :: NUM
+     END SUBROUTINE MERGESORT
+  END INTERFACE
+
+  CALL RANDOM_NUMBER(A)
+
+  TIME1 = OMP_GET_WTIME()
+  CALL MERGESORT(A,N)
+  TIME2 = OMP_GET_WTIME()
+  PRINT*,'N = ', N, 'TIME = ', TIME2-TIME1
+  !DO I = 1, N
+  !   WRITE(1,'(F10.5)')A(I)
+  !END DO
+
+END PROGRAM TESTMERGESORT
+
+RECURSIVE SUBROUTINE MERGESORT(ARR,NUM)
+
+  IMPLICIT NONE
+  REAL(8), DIMENSION(:), INTENT(INOUT) :: ARR
+  INTEGER, INTENT(IN) :: NUM
+  !REAL(8), DIMENSION(:), POINTER :: VA, VB
+  INTEGER :: NA,NB
+  INTEGER :: I,J,K
+  !REAL(8) :: TMP
+  IF (NUM < 2) RETURN
+  !
+  IF (NUM == 2) THEN
+     IF (ARR(1) > ARR(2)) THEN
+        CALL SWAP(ARR(1),ARR(2))
+     END IF
+     RETURN
+  ELSE IF (NUM <= 4) THEN
+     DO I = 1, NUM
+        DO J = I + 1, NUM
+           IF (ARR(I) > ARR(J)) THEN
+              CALL SWAP(ARR(I),ARR(J))
+           END IF
+        END DO
+     END DO
+     RETURN
+  ENDIF
+
+  NA = (NUM+1)/2                ! IF NUM IS ODD NA = NB + 1, ELSE NA = NB
+  NB = NUM-NA
+  !NULLIFY(VA,VB)
+  !VA => ARR(1:NA)
+  !VB => ARR(NA+1:NUM)
+
+  !$OMP PARALLEL SECTIONS SHARED(NA,NB)
+  !$OMP SECTION
+  CALL MERGESORT(ARR(1:NA), NA)
+  !$OMP SECTION
+  CALL MERGESORT(ARR(NA+1:NUM), NB)
+  !$OMP END PARALLEL SECTIONS
+
+  IF (ARR(NA) > ARR(NA+1)) THEN
+     CALL MERGE(ARR(1:NA),ARR(NA+1:NUM))
+  END IF
+  !NULLIFY(VA,VB)
+  RETURN
+
+CONTAINS
+
+  PURE SUBROUTINE MERGE(A, B)
+    IMPLICIT NONE
+    REAL(8), DIMENSION(:), INTENT(INOUT) :: A, B
+    INTEGER :: NA,NB
+    REAL(8), ALLOCATABLE, DIMENSION(:) :: C
+    INTEGER :: I,J,K
+    REAL(8) :: LAST
+    NA = SIZE(A)
+    NB = SIZE(B)
+    ALLOCATE(C(NA+NB))
+    I = 1; J = 1; K = 1
+    DO WHILE(I <= NA .AND. J <= NB)
+       IF (A(I) <= B(J)) THEN
+          C(K) = A(I)
+          I = I+1
+       ELSE
+          C(K) = B(J)
+          J = J+1
+       ENDIF
+       K = K + 1
+    ENDDO
+    DO WHILE (I <= NA)
+       C(K) = A(I)
+       I = I + 1
+       K = K + 1
+    ENDDO
+    DO WHILE (J <= NB)
+       C(K) = B(J)
+       J = J + 1
+       K = K + 1
+    ENDDO
+    A(:) = C(1:NA)
+    B(:) = C(NA+1:NA+NB)
+    DEALLOCATE(C)
+    RETURN
+  END SUBROUTINE MERGE
+  !
+  PURE SUBROUTINE SWAP(X,Y)
+    IMPLICIT NONE
+    REAL(8), INTENT(INOUT) :: X, Y
+    REAL(8) :: TMP
+    TMP = X
+    X   = Y
+    Y   = TMP
+    RETURN
+  END SUBROUTINE SWAP
+END SUBROUTINE MERGESORT
